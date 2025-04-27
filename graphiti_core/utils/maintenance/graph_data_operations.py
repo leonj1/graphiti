@@ -142,8 +142,8 @@ async def retrieve_episodes(
         """
                 MATCH (e:Episodic) WHERE e.valid_at <= $reference_time
                 """
-        + group_id_filter
-        + source_filter
+        + (" " + group_id_filter if group_id_filter else "")
+        + (" " + source_filter if source_filter else "")
         + """
         RETURN e.content AS content,
             e.created_at AS created_at,
@@ -161,7 +161,7 @@ async def retrieve_episodes(
     result = await driver.execute_query(
         query,
         reference_time=reference_time,
-        source=source,
+        source=source.value if source is not None else None,
         num_episodes=last_n,
         group_ids=group_ids,
         database_=DEFAULT_DATABASE,

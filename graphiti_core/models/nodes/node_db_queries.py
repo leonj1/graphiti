@@ -31,7 +31,6 @@ EPISODIC_NODE_SAVE_BULK = """
 
 ENTITY_NODE_SAVE = """
         MERGE (n:Entity {uuid: $entity_data.uuid})
-        SET n:$($labels)
         SET n = $entity_data
         WITH n CALL db.create.setNodeVectorProperty(n, "name_embedding", $entity_data.name_embedding)
         RETURN n.uuid AS uuid"""
@@ -39,9 +38,15 @@ ENTITY_NODE_SAVE = """
 ENTITY_NODE_SAVE_BULK = """
     UNWIND $nodes AS node
     MERGE (n:Entity {uuid: node.uuid})
-    SET n:$(node.labels)
-    SET n = node
-    WITH n, node CALL db.create.setNodeVectorProperty(n, "name_embedding", node.name_embedding)
+    SET n = {
+        uuid: node.uuid,
+        name: node.name,
+        group_id: node.group_id,
+        created_at: node.created_at,
+        summary: node.summary
+    }
+    WITH n, node
+    CALL db.create.setNodeVectorProperty(n, "name_embedding", node.name_embedding)
     RETURN n.uuid AS uuid
 """
 
