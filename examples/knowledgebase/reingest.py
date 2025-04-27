@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
@@ -54,18 +55,22 @@ def parse_text_file(file_path: str) -> List[Dict[str, Any]]:
     Returns:
         List of dictionaries containing parsed chunks
     """
+    print(f"Reading file: {file_path}")
     with open(file_path, encoding='utf-8') as file:
         content = file.read()
     
+    print("Splitting content into paragraphs...")
     # Split content into paragraphs
     paragraphs = [p for p in content.split('\n\n') if p.strip()]
     
+    print(f"Processing {len(paragraphs)} paragraphs into chunks...")
     # Group paragraphs into chunks of reasonable size (about 1000 characters)
     chunks = []
     current_chunk = ""
     chunk_number = 1
     
-    for paragraph in paragraphs:
+    # Add progress bar for paragraph processing
+    for paragraph in tqdm(paragraphs, desc="Chunking text", unit="paragraph"):
         if len(current_chunk) + len(paragraph) > 1000 and current_chunk:
             chunks.append({
                 "chunk_number": chunk_number,
@@ -87,6 +92,7 @@ def parse_text_file(file_path: str) -> List[Dict[str, Any]]:
             "hash": hashlib.md5(current_chunk.strip().encode()).hexdigest()
         })
     
+    print(f"Created {len(chunks)} chunks for processing")
     return chunks
 
 
@@ -174,8 +180,11 @@ async def reingest_text_file(file_path: str) -> None:
     cache = load_cache(cache_file)
     
     # Identify new or changed chunks
+    print("\nChecking for changes in content...")
     new_or_changed_chunks = []
-    for chunk in chunks:
+    
+    # Add progress bar for checking chunks against cache
+    for chunk in tqdm(chunks, desc="Comparing with cache", unit="chunk"):
         chunk_hash = chunk["hash"]
         if chunk_hash not in cache["chunks"]:
             new_or_changed_chunks.append(chunk)
@@ -203,7 +212,10 @@ async def reingest_text_file(file_path: str) -> None:
         
         # Add episodes to the graph
         now = datetime.now(timezone.utc)
-        for i, chunk in enumerate(new_or_changed_chunks):
+        
+        print(f"\nReingesting {len(new_or_changed_chunks)} changed chunks into the knowledge graph...")
+        # Use tqdm to create a progress bar for the reingestion process
+        for i, chunk in enumerate(tqdm(new_or_changed_chunks, desc="Reingesting chunks", unit="chunk")):
             await graphiti.add_episode(
                 name=f"Chunk {chunk['chunk_number']} (Updated)",
                 episode_body=chunk['content'],
@@ -211,12 +223,13 @@ async def reingest_text_file(file_path: str) -> None:
                 source_description=f"Reingested from {file_name}",
                 reference_time=now + timedelta(seconds=i * 10),
             )
-            logger.info(f"Added updated chunk {chunk['chunk_number']} to the graph")
+            # Don't log every chunk to avoid cluttering the console with the progress bar
         
         # Save updated cache
+        print("Saving cache...")
         save_cache(cache_file, cache)
         
-        logger.info(f"Successfully reingested {len(new_or_changed_chunks)} chunks from {file_path}")
+        print(f"\n✅ Successfully reingested {len(new_or_changed_chunks)} chunks from {file_path}")
     
     finally:
         # Close the connection
@@ -226,12 +239,26 @@ async def reingest_text_file(file_path: str) -> None:
 
 async def main():
     """Main function to run the reingestion process."""
+    print("\n=== Graphiti Knowledge Base Reingestion Tool ===\n")
+    
     # Path to the Wizard of Oz text file
     woo_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                  "wizard_of_oz", "woo.txt")
     
-    # Reingest the text file
-    await reingest_text_file(woo_file_path)
+    print(f"Starting reingestion process for: {woo_file_path}")
+    print("This tool will only reingest chunks that have changed since the last run.")
+    print("Progress bars will show you the status of each step.\n")
+    
+    # Create a progress bar for the overall process
+    with tqdm(total=3, desc="Overall progress", unit="step") as pbar:
+        pbar.set_description("Step 1: Checking for changes")
+        # Reingest the text file
+        await reingest_text_file(woo_file_path)
+        pbar.update(3)  # Complete all steps
+    
+    print("\n=== Reingestion Complete ===")
+    print("You can now query the knowledge base using the query.py script.")
+    print("Example: python query.py \"Who is Dorothy?\"")
 
 
 if __name__ == "__main__":

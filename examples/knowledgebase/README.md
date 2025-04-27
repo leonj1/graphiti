@@ -34,6 +34,7 @@ This script:
 - Clears any existing data in the graph database
 - Parses the text file (examples/wizard_of_oz/woo.txt) into manageable chunks
 - Ingests each chunk as an episode in the knowledge graph
+- Displays progress bars to track the ingestion process in real-time
 
 ### 2. Querying the Knowledge Base
 
@@ -66,6 +67,7 @@ This script:
 - Compares chunks with previously ingested data using MD5 hashes
 - Only ingests chunks that are new or have changed
 - Maintains a cache to track which chunks have been ingested
+- Displays progress bars to track the reingestion process in real-time
 
 ## How It Works
 

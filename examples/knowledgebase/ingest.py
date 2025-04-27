@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
@@ -53,18 +54,22 @@ def parse_text_file(file_path: str) -> List[Dict[str, Any]]:
     Returns:
         List of dictionaries containing parsed chunks
     """
+    print(f"Reading file: {file_path}")
     with open(file_path, encoding='utf-8') as file:
         content = file.read()
     
+    print("Splitting content into paragraphs...")
     # Split content into paragraphs
     paragraphs = [p for p in content.split('\n\n') if p.strip()]
     
+    print(f"Processing {len(paragraphs)} paragraphs into chunks...")
     # Group paragraphs into chunks of reasonable size (about 1000 characters)
     chunks = []
     current_chunk = ""
     chunk_number = 1
     
-    for paragraph in paragraphs:
+    # Add progress bar for paragraph processing
+    for paragraph in tqdm(paragraphs, desc="Chunking text", unit="paragraph"):
         if len(current_chunk) + len(paragraph) > 1000 and current_chunk:
             chunks.append({
                 "chunk_number": chunk_number,
@@ -84,6 +89,7 @@ def parse_text_file(file_path: str) -> List[Dict[str, Any]]:
             "content": current_chunk.strip()
         })
     
+    print(f"Created {len(chunks)} chunks for ingestion")
     return chunks
 
 
@@ -130,7 +136,10 @@ async def ingest_text_file(file_path: str, clear_existing: bool = False) -> None
         
         # Add episodes to the graph
         now = datetime.now(timezone.utc)
-        for i, chunk in enumerate(chunks):
+        
+        print(f"\nIngesting {len(chunks)} chunks into the knowledge graph...")
+        # Use tqdm to create a progress bar for the ingestion process
+        for i, chunk in enumerate(tqdm(chunks, desc="Ingesting chunks", unit="chunk")):
             await graphiti.add_episode(
                 name=f"Chunk {chunk['chunk_number']}",
                 episode_body=chunk['content'],
@@ -138,9 +147,10 @@ async def ingest_text_file(file_path: str, clear_existing: bool = False) -> None
                 source_description=f"Ingested from {file_name}",
                 reference_time=now + timedelta(seconds=i * 10),
             )
-            logger.info(f"Added chunk {chunk['chunk_number']} to the graph")
+            # Don't log every chunk to avoid cluttering the console with the progress bar
+            # Instead, we'll use the progress bar to show progress
         
-        logger.info(f"Successfully ingested {len(chunks)} chunks from {file_path}")
+        print(f"\n✅ Successfully ingested {len(chunks)} chunks from {file_path}")
     
     finally:
         # Close the connection
@@ -150,12 +160,26 @@ async def ingest_text_file(file_path: str, clear_existing: bool = False) -> None
 
 async def main():
     """Main function to run the ingestion process."""
+    print("\n=== Graphiti Knowledge Base Ingestion Tool ===\n")
+    
     # Path to the Wizard of Oz text file
     woo_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                  "wizard_of_oz", "woo.txt")
     
-    # Ingest the text file, clearing existing data
-    await ingest_text_file(woo_file_path, clear_existing=True)
+    print(f"Starting ingestion process for: {woo_file_path}")
+    print("This may take several minutes depending on the file size and Neo4j performance.")
+    print("Progress bars will show you the status of each step.\n")
+    
+    # Create a progress bar for the overall process
+    with tqdm(total=3, desc="Overall progress", unit="step") as pbar:
+        pbar.set_description("Step 1: Clearing existing data")
+        # Ingest the text file, clearing existing data
+        await ingest_text_file(woo_file_path, clear_existing=True)
+        pbar.update(3)  # Complete all steps
+    
+    print("\n=== Ingestion Complete ===")
+    print("You can now query the knowledge base using the query.py script.")
+    print("Example: python query.py \"Who is Dorothy?\"")
 
 
 if __name__ == "__main__":
