@@ -9,7 +9,7 @@ on:
 
 jobs:
   spam-detection:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     permissions:
       issues: write
       pull-requests: write
